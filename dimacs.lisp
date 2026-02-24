@@ -61,18 +61,6 @@
      (mv (coerce (reverse acc) 'string) chars))
     (t (read-token (cdr chars) (cons (car chars) acc)))))
 
-(defun parse-int-string (str)
-  ;; Parse a decimal integer string (possibly with leading '-').
-  ;; Returns the integer, or nil on failure.
-  (declare (xargs :mode :program))
-  (let* ((chars (coerce str 'list)))
-    (if (endp chars)
-        nil
-      (if (eql (car chars) #\-)
-          (let ((n (parse-nat-string (coerce (cdr chars) 'string))))
-            (if n (- n) nil))
-        (parse-nat-string str)))))
-
 (defun parse-nat-chars (chars acc)
   (declare (xargs :mode :program))
   (cond
@@ -90,6 +78,18 @@
         nil
       (parse-nat-chars chars 0))))
 
+(defun parse-int-string (str)
+  ;; Parse a decimal integer string (possibly with leading '-').
+  ;; Returns the integer, or nil on failure.
+  (declare (xargs :mode :program))
+  (let* ((chars (coerce str 'list)))
+    (if (endp chars)
+        nil
+      (if (eql (car chars) #\-)
+          (let ((n (parse-nat-string (coerce (cdr chars) 'string))))
+            (if n (- n) nil))
+        (parse-nat-string str)))))
+
 ;;;; ============================================================
 ;;;; 3.  DIMACS token-stream parser
 ;;;; ============================================================
@@ -98,12 +98,12 @@
   ;; Parse integer tokens until end of input or 'p'/'c' header.
   ;; Integers != 0 are accumulated into cur-clause.
   ;; 0 terminates a clause.
-  ;; Returns (mv num-vars num-clauses clause-list rest-chars).
+  ;; Returns clause-list (in the same format as the DIMACS file).
   ;; This version is called AFTER the header is parsed.
   (declare (xargs :mode :program))
   (let* ((chars (skip-whitespace chars)))
     (if (endp chars)
-        (mv (reverse acc-clauses))
+        (reverse acc-clauses)
       (if (eql (car chars) #\c)
           ;; Comment line: skip
           (parse-clause-tokens (skip-to-newline chars) cur-clause acc-clauses)
@@ -181,10 +181,9 @@
     (open-input-channel filename :character state)
     (if (null channel)
         (mv nil state)
-      (mv-let (contents state)
-        (read-file-into-string2 filename 0 nil state)
-        (let* ((state (close-input-channel channel state)))
-          (mv contents state))))))
+      (let* ((contents (read-file-into-string2 filename 0 nil nil state))
+             (state    (close-input-channel channel state)))
+        (mv contents state)))))
 
 (defun read-dimacs-file (filename state)
   ;; Read and parse a DIMACS CNF file.
@@ -196,14 +195,13 @@
         (progn$
           (cw "Error: could not open file ~s0~%" filename)
           (mv 0 nil state))
-      (mv-let (str state)
-        (read-file-into-string2 filename 0 nil state)
-        (let* ((state (close-input-channel channel state)))
-          (if (null str)
-              (mv 0 nil state)
-            (mv-let (nv clauses)
-              (parse-dimacs-string str)
-              (mv nv clauses state))))))))
+      (let* ((str   (read-file-into-string2 filename 0 nil nil state))
+             (state (close-input-channel channel state)))
+        (if (null str)
+            (mv 0 nil state)
+          (mv-let (nv clauses)
+            (parse-dimacs-string str)
+            (mv nv clauses state)))))))
 
 ;;;; ============================================================
 ;;;; 5.  Result printing
@@ -214,19 +212,18 @@
   (declare (xargs :mode :program))
   (if (endp model)
       (cw "~%")
-    (let* ((entry (car model))
-           (var   (car entry))
-           (pos   (cdr entry)))
-      (cw "~s0~s1 " (if pos "" "-") var)
+    (prog2$
+      (cw "~s0~s1 " (if (cdr (car model)) "" "-") (car (car model)))
       (print-model-alist (cdr model)))))
 
 (defun print-result (result solver)
   (declare (xargs :stobjs solver :mode :program))
   (cond
     ((eq result :sat)
-     (cw "s SATISFIABLE~%v ")
-     (print-model-alist (get-model solver))
-     (cw "0~%"))
+     (progn$
+       (cw "s SATISFIABLE~%v ")
+       (print-model-alist (get-model solver))
+       (cw "0~%")))
     ((eq result :unsat)
      (cw "s UNSATISFIABLE~%"))
     (t

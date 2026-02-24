@@ -9,10 +9,10 @@
 ACL2 ?= acl2
 
 # The ACL2 invocation that loads solver + DIMACS support
-LOAD_CMD = (ld \"solver.lisp\" :ld-error-action :error) \
-           (ld \"dimacs.lisp\" :ld-error-action :error)
+LOAD_CMD = (ld "solver.lisp" :ld-error-action :error) \
+           (ld "dimacs.lisp" :ld-error-action :error)
 
-.PHONY: test-sat test-unsat bench check clean
+.PHONY: test-sat test-unsat bench check test clean
 
 ## Smoke tests —————————————————————————————————————————————————
 
@@ -39,6 +39,10 @@ endif
 
 check:
 	@echo '$(LOAD_CMD) (acl2::quit)' | $(ACL2) 2>&1 | tail -5
+
+test:
+	@echo '$(LOAD_CMD) (ld "tests.lisp" :ld-error-action :error) (run-all-tests) (acl2::quit)' \
+	  | $(ACL2)
 
 ## Generate tiny test instances ——————————————————————————————
 
